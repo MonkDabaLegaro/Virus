@@ -89,6 +89,32 @@ function validText(value: string, max: number): boolean {
   return value.trim().length > 0 && value.length <= max;
 }
 
+function invalidFixture(): never {
+  throw new Error('Invalid fixture telemetry event');
+}
+
+function validateFixtureEvent(event: TelemetryEvent): void {
+  if (!validText(event.id, 200) || !validText(event.scenarioId, 120) || !validTimestamp(event.timestamp) || !validText(event.action, 120) || !Array.isArray(event.tags) || event.tags.some((tag) => typeof tag !== 'string' || tag.length > 128)) invalidFixture();
+
+  if (event.kind === 'process') {
+    if (!event.process || !Number.isInteger(event.process.pid) || event.process.pid < 0 || (event.process.ppid !== null && (!Number.isInteger(event.process.ppid) || event.process.ppid < 0)) || !validText(event.process.image, 1024) || (event.process.commandLine !== undefined && event.process.commandLine.length > 4096)) invalidFixture();
+    return;
+  }
+  if (event.kind === 'filesystem') {
+    if (!event.file || !validText(event.file.path, 4096) || (event.file.extension !== undefined && event.file.extension.length > 128)) invalidFixture();
+    return;
+  }
+  if (event.kind === 'registry') {
+    if (!event.registry || !validText(event.registry.key, 4096) || (event.registry.valueName !== undefined && event.registry.valueName.length > 1024)) invalidFixture();
+    return;
+  }
+  if (event.kind === 'network') {
+    if (!event.network || !['tcp', 'udp'].includes(event.network.protocol) || !validText(event.network.destinationIp, 128) || !Number.isInteger(event.network.destinationPort) || event.network.destinationPort < 1 || event.network.destinationPort > 65535) invalidFixture();
+    return;
+  }
+  invalidFixture();
+}
+
 function validateObservation(observation: WindowsObservation): void {
   if (!validTimestamp(observation.timestamp)) throw new Error('Invalid Windows observation');
 
@@ -124,7 +150,9 @@ export class FixtureTelemetryCollector implements TelemetryCollector<FixtureColl
 
   async collect(input: FixtureCollectorInput): Promise<CollectorResult> {
     const scenarioId = requireScenarioId(input.scenarioId);
+    if (input.events.length > 5000) throw new Error('Invalid fixture telemetry event');
     const events = input.events.map((event) => {
+      validateFixtureEvent(event);
       if (event.scenarioId !== scenarioId) throw new Error('Fixture scenario mismatch');
       return { ...event, tags: provenance(event.tags, 'collector:fixture') };
     });
