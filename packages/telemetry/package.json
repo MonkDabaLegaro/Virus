@@ -5,7 +5,7 @@
   "type": "module",
   "exports": "./src/index.ts",
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts",
+    "build": "tsup src/index.ts --format esm",
     "typecheck": "tsc --noEmit src/index.ts --moduleResolution Bundler --module ESNext --target ES2022 --strict"
   },
   "dependencies": { "@malware-lab/shared-types": "0.1.0" },
