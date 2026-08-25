@@ -26,7 +26,7 @@ export interface CollectorDescriptor {
 
 export interface FixtureCollectorInput {
   scenarioId: string;
-  events: TelemetryEvent[];
+  events: unknown[];
 }
 
 type WindowsProcessObservation = {
@@ -81,35 +81,44 @@ function requireScenarioId(value: string): string {
   return scenarioId;
 }
 
-function validTimestamp(value: string): boolean {
-  return value.length <= 64 && Number.isFinite(Date.parse(value));
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function validText(value: string, max: number): boolean {
-  return value.trim().length > 0 && value.length <= max;
+function validTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 64 && Number.isFinite(Date.parse(value));
+}
+
+function validText(value: unknown, max: number): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= max;
+}
+
+function validOptionalText(value: unknown, max: number): boolean {
+  return value === undefined || (typeof value === 'string' && value.length <= max);
 }
 
 function invalidFixture(): never {
   throw new Error('Invalid fixture telemetry event');
 }
 
-function validateFixtureEvent(event: TelemetryEvent): void {
-  if (!validText(event.id, 200) || !validText(event.scenarioId, 120) || !validTimestamp(event.timestamp) || !validText(event.action, 120) || !Array.isArray(event.tags) || event.tags.some((tag) => typeof tag !== 'string' || tag.length > 128)) invalidFixture();
+function validateFixtureEvent(value: unknown): asserts value is TelemetryEvent {
+  if (!isRecord(value)) invalidFixture();
+  if (!validText(value.id, 200) || !validText(value.scenarioId, 120) || !validTimestamp(value.timestamp) || !validText(value.action, 120) || !Array.isArray(value.tags) || value.tags.some((tag) => typeof tag !== 'string' || tag.length > 128)) invalidFixture();
 
-  if (event.kind === 'process') {
-    if (!event.process || !Number.isInteger(event.process.pid) || event.process.pid < 0 || (event.process.ppid !== null && (!Number.isInteger(event.process.ppid) || event.process.ppid < 0)) || !validText(event.process.image, 1024) || (event.process.commandLine !== undefined && event.process.commandLine.length > 4096)) invalidFixture();
+  if (value.kind === 'process') {
+    if (!isRecord(value.process) || !Number.isInteger(value.process.pid) || (value.process.pid as number) < 0 || (value.process.ppid !== null && (!Number.isInteger(value.process.ppid) || (value.process.ppid as number) < 0)) || !validText(value.process.image, 1024) || !validOptionalText(value.process.commandLine, 4096)) invalidFixture();
     return;
   }
-  if (event.kind === 'filesystem') {
-    if (!event.file || !validText(event.file.path, 4096) || (event.file.extension !== undefined && event.file.extension.length > 128)) invalidFixture();
+  if (value.kind === 'filesystem') {
+    if (!isRecord(value.file) || !validText(value.file.path, 4096) || !validOptionalText(value.file.extension, 128)) invalidFixture();
     return;
   }
-  if (event.kind === 'registry') {
-    if (!event.registry || !validText(event.registry.key, 4096) || (event.registry.valueName !== undefined && event.registry.valueName.length > 1024)) invalidFixture();
+  if (value.kind === 'registry') {
+    if (!isRecord(value.registry) || !validText(value.registry.key, 4096) || !validOptionalText(value.registry.valueName, 1024)) invalidFixture();
     return;
   }
-  if (event.kind === 'network') {
-    if (!event.network || !['tcp', 'udp'].includes(event.network.protocol) || !validText(event.network.destinationIp, 128) || !Number.isInteger(event.network.destinationPort) || event.network.destinationPort < 1 || event.network.destinationPort > 65535) invalidFixture();
+  if (value.kind === 'network') {
+    if (!isRecord(value.network) || (value.network.protocol !== 'tcp' && value.network.protocol !== 'udp') || !validText(value.network.destinationIp, 128) || !Number.isInteger(value.network.destinationPort) || (value.network.destinationPort as number) < 1 || (value.network.destinationPort as number) > 65535) invalidFixture();
     return;
   }
   invalidFixture();
@@ -119,19 +128,19 @@ function validateObservation(observation: WindowsObservation): void {
   if (!validTimestamp(observation.timestamp)) throw new Error('Invalid Windows observation');
 
   if (observation.kind === 'process') {
-    if (!Number.isInteger(observation.pid) || observation.pid < 0 || (observation.ppid !== null && (!Number.isInteger(observation.ppid) || observation.ppid < 0)) || !validText(observation.image, 1024) || (observation.commandLine !== undefined && observation.commandLine.length > 4096)) {
+    if (!Number.isInteger(observation.pid) || observation.pid < 0 || (observation.ppid !== null && (!Number.isInteger(observation.ppid) || observation.ppid < 0)) || !validText(observation.image, 1024) || !validOptionalText(observation.commandLine, 4096)) {
       throw new Error('Invalid Windows observation');
     }
     return;
   }
 
   if (observation.kind === 'filesystem') {
-    if (!validText(observation.path, 4096) || (observation.extension !== undefined && observation.extension.length > 128)) throw new Error('Invalid Windows observation');
+    if (!validText(observation.path, 4096) || !validOptionalText(observation.extension, 128)) throw new Error('Invalid Windows observation');
     return;
   }
 
   if (observation.kind === 'registry') {
-    if (!validText(observation.key, 4096) || (observation.valueName !== undefined && observation.valueName.length > 1024)) throw new Error('Invalid Windows observation');
+    if (!validText(observation.key, 4096) || !validOptionalText(observation.valueName, 1024)) throw new Error('Invalid Windows observation');
     return;
   }
 
@@ -151,10 +160,10 @@ export class FixtureTelemetryCollector implements TelemetryCollector<FixtureColl
   async collect(input: FixtureCollectorInput): Promise<CollectorResult> {
     const scenarioId = requireScenarioId(input.scenarioId);
     if (input.events.length > 5000) throw new Error('Invalid fixture telemetry event');
-    const events = input.events.map((event) => {
-      validateFixtureEvent(event);
-      if (event.scenarioId !== scenarioId) throw new Error('Fixture scenario mismatch');
-      return { ...event, tags: provenance(event.tags, 'collector:fixture') };
+    const events = input.events.map((value): TelemetryEvent => {
+      validateFixtureEvent(value);
+      if (value.scenarioId !== scenarioId) throw new Error('Fixture scenario mismatch');
+      return { ...value, tags: provenance(value.tags, 'collector:fixture') };
     });
     return { collectorId: this.id, source: this.source, scenarioId, events };
   }
