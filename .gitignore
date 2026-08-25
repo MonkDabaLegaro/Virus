@@ -9,7 +9,8 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# Malware samples are never committed.
+# Malware samples and local laboratory state are never committed.
 samples/
 quarantine/
+.malware-lab/
 *.vir

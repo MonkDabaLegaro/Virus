@@ -1,0 +1,22 @@
+{
+  "id": "windows-analysis",
+  "label": "Windows Disposable Analysis Guest",
+  "guestOs": "Windows",
+  "architecture": "x86_64",
+  "cpuCount": 2,
+  "memoryMb": 4096,
+  "disposable": true,
+  "baselineSnapshot": "clean-baseline",
+  "network": {
+    "mode": "internal",
+    "name": "malware-lab-isolated",
+    "hostAccess": false,
+    "internetAccess": false
+  },
+  "integrations": {
+    "sharedFolders": false,
+    "clipboard": false,
+    "dragAndDrop": false,
+    "usbPassthrough": false
+  }
+}

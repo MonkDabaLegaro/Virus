@@ -38,3 +38,52 @@ export interface SystemStatus {
   realExecutionEnabled: boolean;
   hypervisors: HypervisorStatus[];
 }
+
+export interface SampleRegistrationInput {
+  sha256: string;
+  family: string;
+  aliases?: string[];
+  sourceReference?: string | null;
+}
+
+export interface SampleRecord {
+  id: string;
+  sha256: string;
+  family: string;
+  aliases: string[];
+  sourceReference: string | null;
+  state: 'metadata-only';
+  createdAt: string;
+}
+
+export interface LabProfile {
+  id: string;
+  label: string;
+  guestOs: string;
+  architecture: string;
+  cpuCount: number;
+  memoryMb: number;
+  disposable: true;
+  baselineSnapshot: string;
+  network: {
+    mode: 'internal';
+    name: string;
+    hostAccess: false;
+    internetAccess: false;
+  };
+  integrations: {
+    sharedFolders: false;
+    clipboard: false;
+    dragAndDrop: false;
+    usbPassthrough: false;
+  };
+}
+
+export interface LabExecutionPlan {
+  labId: string;
+  scenarioId: string;
+  hypervisorId: string | null;
+  profile: LabProfile;
+  realExecutionEnabled: false;
+  steps: string[];
+}

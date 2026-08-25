@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsup src/index.ts --format esm --dts --no-external @malware-lab/lab-core --no-external @malware-lab/hypervisor --no-external @malware-lab/shared-types",
+    "build": "tsup src/index.ts --format esm --dts --no-external @malware-lab/lab-core --no-external @malware-lab/hypervisor --no-external @malware-lab/sample-registry --no-external @malware-lab/shared-types",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
     "@malware-lab/hypervisor": "0.1.0",
     "@malware-lab/lab-core": "0.1.0",
+    "@malware-lab/sample-registry": "0.1.0",
     "@malware-lab/shared-types": "0.1.0",
     "fastify": "^5.5.0",
     "zod": "^4.1.3"
