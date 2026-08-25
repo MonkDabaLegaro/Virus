@@ -6,7 +6,7 @@
   "exports": "./src/index.ts",
   "scripts": {
     "build": "tsup src/index.ts --format esm",
-    "typecheck": "tsc --noEmit src/index.ts --moduleResolution Bundler --module ESNext --target ES2022 --strict",
+    "typecheck": "tsc --noEmit src/index.ts --moduleResolution Bundler --module ESNext --target ES2022 --strict --allowImportingTsExtensions",
     "test": "node --test --experimental-strip-types src/index.test.ts src/adapters.test.ts"
   },
   "dependencies": {
