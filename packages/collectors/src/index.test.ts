@@ -26,7 +26,15 @@ test('fixture collector preserves event semantics and adds collector provenance'
 test('fixture collector rejects malformed telemetry instead of trusting JSON casts', async () => {
   const collector = new FixtureTelemetryCollector();
   await assert.rejects(
-    collector.collect({ scenarioId: 'wannacry', events: [{ id: 'bad', scenarioId: 'wannacry', timestamp: 'not-a-date', kind: 'process', action: 'start', tags: [] } as any] }),
+    collector.collect({ scenarioId: 'wannacry', events: [{ id: 'bad', scenarioId: 'wannacry', timestamp: 'not-a-date', kind: 'process', action: 'start', tags: [] }] }),
+    /Invalid fixture telemetry event/
+  );
+});
+
+test('fixture collector rejects non-object JSON entries as invalid telemetry', async () => {
+  const collector = new FixtureTelemetryCollector();
+  await assert.rejects(
+    collector.collect({ scenarioId: 'wannacry', events: [null] }),
     /Invalid fixture telemetry event/
   );
 });
