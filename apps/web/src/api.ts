@@ -1,4 +1,6 @@
 import type {
+  AnalysisReport,
+  DetectionCorrelation,
   DetectionFinding,
   LabExecutionPlan,
   LabProfile,
@@ -20,6 +22,7 @@ async function json<T>(url:string,init?:RequestInit):Promise<T>{
   if(!response.ok){const payload=await response.json().catch(()=>null) as {message?:string}|null;throw new Error(payload?.message??`Request failed: ${response.status}`)}
   return response.json() as Promise<T>;
 }
+async function text(url:string):Promise<string>{ const response=await fetch(url); if(!response.ok)throw new Error(`Request failed: ${response.status}`); return response.text(); }
 
 export const api={
   system:()=>json<SystemStatus>('/api/system'),
@@ -30,6 +33,9 @@ export const api={
   telemetryEvents:(kind?:TelemetryKind)=>json<TelemetryEvent[]>(`/api/telemetry/events${kind?`?kind=${kind}`:''}`),
   telemetrySummary:()=>json<TelemetrySummary>('/api/telemetry/summary'),
   detections:()=>json<DetectionFinding[]>('/api/detections'),
+  correlations:()=>json<DetectionCorrelation[]>('/api/detections/correlations'),
+  analysisReport:()=>json<AnalysisReport>('/api/analysis/report'),
+  analysisReportMarkdown:()=>text('/api/analysis/report.md'),
   replayTelemetry:(scenarioId:string)=>json<TelemetryEvent[]>(`/api/telemetry/replay/${encodeURIComponent(scenarioId)}`,{method:'POST'}),
   vms:()=>json<VmDescriptor[]>('/api/vms'),
   vm:(providerId:string,vmId:string)=>json<VmInspection>(`/api/vms/${encodeURIComponent(providerId)}/${encodeURIComponent(vmId)}`),

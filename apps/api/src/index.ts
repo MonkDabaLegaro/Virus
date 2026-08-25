@@ -42,6 +42,9 @@ app.post<{Params:{scenarioId:string}}>('/api/telemetry/replay/:scenarioId',async
 app.get('/api/telemetry/events',async req=>{ const query=z.object({kind:z.enum(['process','filesystem','registry','network']).optional()}).parse(req.query); return telemetry.events(query.kind as TelemetryKind|undefined); });
 app.get('/api/telemetry/summary',async()=>telemetry.summary());
 app.get('/api/detections',async()=>telemetry.findings());
+app.get('/api/detections/correlations',async()=>telemetry.correlations());
+app.get('/api/analysis/report',async()=>telemetry.report());
+app.get('/api/analysis/report.md',async(_req,reply)=>reply.type('text/markdown; charset=utf-8').send(telemetry.markdownReport()));
 
 app.get('/api/labs',async()=>registry.list());
 app.post('/api/labs',async(req,reply)=>{ const body=z.object({scenarioId:z.string()}).parse(req.body); const s=(await loadScenarios()).find(x=>x.id===body.scenarioId); if(!s)return reply.code(404).send({message:'Scenario not found'}); return registry.create(s.id,s.name); });

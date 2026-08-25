@@ -13,23 +13,13 @@ const iconPaths = {
   restore: '/icons/rotate-ccw.svg',
   sample: '/icons/file-search.svg',
   registry: '/icons/database.svg',
-  malware: '/icons/biohazard.svg'
+  malware: '/icons/biohazard.svg',
+  file: '/icons/file-search.svg'
 } as const;
 
 export type IconName = keyof typeof iconPaths;
 
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const url = iconPaths[name];
-  return (
-    <span
-      className="svg-icon"
-      aria-hidden="true"
-      style={{
-        width: size,
-        height: size,
-        WebkitMaskImage: `url(${url})`,
-        maskImage: `url(${url})`
-      }}
-    />
-  );
+  return <span className="svg-icon" aria-hidden="true" style={{ width:size, height:size, WebkitMaskImage:`url(${url})`, maskImage:`url(${url})` }} />;
 }
