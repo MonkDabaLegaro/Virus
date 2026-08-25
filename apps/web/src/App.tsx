@@ -1,232 +1,103 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from './api';
 import { Icon, type IconName } from './Icon';
-import type { LabSession, LabState, ScenarioSummary, SystemStatus } from '@malware-lab/shared-types';
+import type { LabExecutionPlan, LabProfile, LabSession, LabState, SampleRecord, ScenarioSummary, SystemStatus } from '@malware-lab/shared-types';
 
 type NavItem = { label: string; icon: IconName };
-
 const navSections: Array<{ label: string; items: NavItem[] }> = [
   { label: 'CENTRO', items: [{ label: 'Dashboard', icon: 'dashboard' }] },
-  {
-    label: 'LABORATORIO',
-    items: [
-      { label: 'Laboratory', icon: 'laboratory' },
-      { label: 'Virtual Machines', icon: 'vm' },
-      { label: 'Network', icon: 'network' },
-      { label: 'Samples', icon: 'samples' }
-    ]
-  },
-  {
-    label: 'ANÁLISIS',
-    items: [
-      { label: 'Processes', icon: 'processes' },
-      { label: 'Filesystem', icon: 'filesystem' },
-      { label: 'Registry', icon: 'registry' },
-      { label: 'Telemetry', icon: 'terminal' }
-    ]
-  },
-  {
-    label: 'DEFENSA',
-    items: [
-      { label: 'Detection', icon: 'detection' },
-      { label: 'IOC Scanner', icon: 'scanner' },
-      { label: 'Remediation', icon: 'remediation' }
-    ]
-  }
+  { label: 'LABORATORIO', items: [{ label: 'Laboratory', icon: 'laboratory' }, { label: 'Virtual Machines', icon: 'vm' }, { label: 'Network', icon: 'network' }, { label: 'Samples', icon: 'samples' }] },
+  { label: 'ANÁLISIS', items: [{ label: 'Processes', icon: 'processes' }, { label: 'Filesystem', icon: 'filesystem' }, { label: 'Registry', icon: 'registry' }, { label: 'Telemetry', icon: 'terminal' }] },
+  { label: 'DEFENSA', items: [{ label: 'Detection', icon: 'detection' }, { label: 'IOC Scanner', icon: 'scanner' }, { label: 'Remediation', icon: 'remediation' }] }
 ];
+const stateLabels: Record<LabState, string> = { idle: 'IDLE', prepared: 'PREPARED', running: 'RUNNING', detected: 'DETECTED', contained: 'CONTAINED', remediating: 'REMEDIATING', clean: 'CLEAN' };
 
-const stateLabels: Record<LabState, string> = {
-  idle: 'IDLE',
-  prepared: 'PREPARED',
-  running: 'RUNNING',
-  detected: 'DETECTED',
-  contained: 'CONTAINED',
-  remediating: 'REMEDIATING',
-  clean: 'CLEAN'
-};
-
-function StatusDot({ active, danger = false }: { active: boolean; danger?: boolean }) {
-  return <span className={`status-dot ${active ? (danger ? 'danger' : 'active') : ''}`} />;
-}
+function StatusDot({ active, danger = false }: { active: boolean; danger?: boolean }) { return <span className={`status-dot ${active ? (danger ? 'danger' : 'active') : ''}`} />; }
 
 export function App() {
   const [system, setSystem] = useState<SystemStatus | null>(null);
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
+  const [samples, setSamples] = useState<SampleRecord[]>([]);
+  const [profiles, setProfiles] = useState<LabProfile[]>([]);
   const [labs, setLabs] = useState<LabSession[]>([]);
-  const [selectedScenario, setSelectedScenario] = useState<string>('wannacry');
+  const [plan, setPlan] = useState<LabExecutionPlan | null>(null);
+  const [selectedScenario, setSelectedScenario] = useState('wannacry');
   const [activeNav, setActiveNav] = useState('Dashboard');
   const [error, setError] = useState<string | null>(null);
+  const [sampleHash, setSampleHash] = useState('');
 
   const refresh = async () => {
     try {
-      const [nextSystem, nextScenarios, nextLabs] = await Promise.all([
-        api.system(),
-        api.scenarios(),
-        api.labs()
-      ]);
-      setSystem(nextSystem);
-      setScenarios(nextScenarios);
-      setLabs(nextLabs);
-      if (nextScenarios[0] && !nextScenarios.some((item) => item.id === selectedScenario)) {
-        setSelectedScenario(nextScenarios[0].id);
-      }
+      const [nextSystem, nextScenarios, nextLabs, nextSamples, nextProfiles] = await Promise.all([api.system(), api.scenarios(), api.labs(), api.samples(), api.profiles()]);
+      setSystem(nextSystem); setScenarios(nextScenarios); setLabs(nextLabs); setSamples(nextSamples); setProfiles(nextProfiles);
+      if (nextScenarios[0] && !nextScenarios.some((item) => item.id === selectedScenario)) setSelectedScenario(nextScenarios[0].id);
       setError(null);
-    } catch {
-      setError('No se pudo conectar con el control plane local.');
-    }
+    } catch { setError('No se pudo conectar con el control plane local.'); }
   };
 
-  useEffect(() => {
-    void refresh();
-  }, []);
-
+  useEffect(() => { void refresh(); }, []);
   const scenario = scenarios.find((item) => item.id === selectedScenario) ?? scenarios[0];
-  const activeLab = useMemo(
-    () => labs.find((lab) => lab.scenarioId === scenario?.id) ?? labs[0],
-    [labs, scenario]
-  );
+  const activeLab = useMemo(() => labs.find((lab) => lab.scenarioId === scenario?.id) ?? labs[0], [labs, scenario]);
+  const availableHypervisor = system?.hypervisors.find((item) => item.available);
+  const activeState = activeLab?.state ?? 'idle';
+
+  useEffect(() => {
+    if (!activeLab) { setPlan(null); return; }
+    void api.plan(activeLab.id).then(setPlan).catch(() => setPlan(null));
+  }, [activeLab?.id, activeLab?.updatedAt]);
 
   const createLab = async () => {
     if (!scenario) return;
     const lab = await api.createLab(scenario.id);
     setLabs((current) => [lab, ...current.filter((item) => item.id !== lab.id)]);
   };
-
   const action = async (name: 'prepare' | 'detect' | 'contain' | 'remediate' | 'restore') => {
     if (!activeLab) return;
     const updated = await api.actOnLab(activeLab.id, name);
     setLabs((current) => current.map((lab) => (lab.id === updated.id ? updated : lab)));
   };
+  const registerSample = async () => {
+    if (!scenario || sampleHash.length !== 64) return;
+    const record = await api.registerSample({ sha256: sampleHash, family: scenario.id, aliases: [scenario.name] });
+    setSamples((current) => [record, ...current.filter((item) => item.id !== record.id)]);
+    setSampleHash('');
+  };
 
-  const availableHypervisor = system?.hypervisors.find((item) => item.available);
-  const activeState = activeLab?.state ?? 'idle';
+  const renderWorkspace = () => {
+    if (activeNav === 'Samples') return (
+      <section className="content-grid single-mode">
+        <article className="panel wide-panel">
+          <div className="panel-heading"><div><span className="eyebrow">SAMPLE REGISTRY</span><h2>Metadata-only quarantine index</h2></div><div className="state-badge">{samples.length} RECORDS</div></div>
+          <div className="sample-register"><input value={sampleHash} onChange={(event) => setSampleHash(event.target.value.trim())} placeholder="SHA-256 de la muestra" maxLength={64} /><button className="primary-action" onClick={registerSample} disabled={sampleHash.length !== 64}><Icon name="sample" /> REGISTER HASH</button></div>
+          <div className="data-table"><div className="data-row header"><span>FAMILY</span><span>SHA-256</span><span>STATE</span><span>CREATED</span></div>{samples.length === 0 ? <div className="empty-state">No hay muestras registradas. El registro almacena metadatos, no binarios.</div> : samples.map((sample) => <div className="data-row" key={sample.id}><strong>{sample.family}</strong><code>{sample.sha256}</code><span className="state-badge">METADATA ONLY</span><time>{new Date(sample.createdAt).toLocaleString()}</time></div>)}</div>
+        </article>
+      </section>
+    );
 
-  return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark"><Icon name="biohazard" size={24} /></div>
-          <div>
-            <strong>MALWARE LAB</strong>
-            <span>LOCAL RESEARCH SYSTEM</span>
-          </div>
-        </div>
+    if (activeNav === 'Virtual Machines') return (
+      <section className="content-grid single-mode">
+        <article className="panel wide-panel">
+          <div className="panel-heading"><div><span className="eyebrow">LAB PROFILE</span><h2>Disposable Windows analysis guest</h2></div><div className="state-badge">HOST GUARDED</div></div>
+          {profiles.map((profile) => <div className="vm-profile" key={profile.id}><div className="machine-frame large"><Icon name="vm" size={38} /><strong>{profile.label}</strong><span>{profile.guestOs} / {profile.architecture}</span></div><div className="profile-grid"><div><span>CPU</span><strong>{profile.cpuCount} vCPU</strong></div><div><span>MEMORY</span><strong>{profile.memoryMb} MB</strong></div><div><span>SNAPSHOT</span><strong>{profile.baselineSnapshot}</strong></div><div><span>NETWORK</span><strong>{profile.network.mode.toUpperCase()}</strong></div><div><span>HOST ACCESS</span><strong>DISABLED</strong></div><div><span>INTERNET</span><strong>DISABLED</strong></div><div><span>SHARED FOLDERS</span><strong>DISABLED</strong></div><div><span>CLIPBOARD</span><strong>DISABLED</strong></div></div></div>)}
+        </article>
+      </section>
+    );
 
-        <nav>
-          {navSections.map((section) => (
-            <section className="nav-section" key={section.label}>
-              <div className="nav-heading">{section.label}</div>
-              {section.items.map((item) => (
-                <button
-                  className={`nav-item ${activeNav === item.label ? 'selected' : ''}`}
-                  key={item.label}
-                  onClick={() => setActiveNav(item.label)}
-                >
-                  <Icon name={item.icon} />
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </section>
-          ))}
-        </nav>
+    return <>
+      <section className="metrics-grid">
+        <article className="metric-card"><div className="metric-icon"><Icon name="vm" /></div><div><span>HYPERVISOR</span><strong>{availableHypervisor?.label ?? 'NOT DETECTED'}</strong></div></article>
+        <article className="metric-card"><div className="metric-icon"><Icon name="network" /></div><div><span>NETWORK POLICY</span><strong>ISOLATED LAB</strong></div></article>
+        <article className="metric-card"><div className="metric-icon"><Icon name="samples" /></div><div><span>SAMPLES</span><strong>{String(samples.length).padStart(2, '0')}</strong></div></article>
+        <article className="metric-card"><div className="metric-icon"><Icon name="laboratory" /></div><div><span>ACTIVE LABS</span><strong>{String(labs.length).padStart(2, '0')}</strong></div></article>
+      </section>
+      <section className="content-grid">
+        <article className="panel lab-panel"><div className="panel-heading"><div><span className="eyebrow">ACTIVE LAB</span><h2>{scenario?.name ?? 'No scenario selected'}</h2></div><div className={`state-badge state-${activeState.toLowerCase()}`}>{stateLabels[activeState]}</div></div><div className="lab-console"><div className="lab-machine"><div className="machine-frame"><Icon name="vm" size={32} /><strong>{activeLab?.vmName ?? 'WINDOWS ANALYSIS VM'}</strong><span>{scenario?.platform ?? 'Windows'} / Disposable guest</span></div></div><div className="lab-facts"><div><span>SCENARIO</span><strong>{scenario?.id ?? '—'}</strong></div><div><span>CATEGORY</span><strong>{scenario?.category?.toUpperCase() ?? '—'}</strong></div><div><span>RISK</span><strong className="danger-text">{scenario?.risk?.toUpperCase() ?? '—'}</strong></div><div><span>SNAPSHOT</span><strong>{activeLab?.snapshot ?? 'NOT PREPARED'}</strong></div></div></div><div className="action-row">{!activeLab ? <button className="primary-action" onClick={createLab}><Icon name="laboratory" /> CREATE LAB</button> : <><button className="primary-action" onClick={() => action('prepare')}><Icon name="vm" /> PREPARE</button><button onClick={() => action('detect')}><Icon name="detection" /> DETECT</button><button onClick={() => action('contain')}><Icon name="detection" /> CONTAIN</button><button onClick={() => action('remediate')}><Icon name="remediation" /> REMEDIATE</button><button onClick={() => action('restore')}><Icon name="restore" /> RESTORE</button></>}</div></article>
+        <aside className="panel system-panel"><div className="panel-heading compact"><div><span className="eyebrow">SYSTEM STATUS</span><h3>Host boundary</h3></div></div><div className="system-list"><div><span>Mode</span><strong>LOCAL ONLY</strong></div><div><span>Real execution</span><strong>{system?.realExecutionEnabled ? 'ARMED' : 'LOCKED'}</strong></div><div><span>Host</span><strong>{system?.host.platform ?? '—'} / {system?.host.architecture ?? '—'}</strong></div><div><span>Network</span><strong>ISOLATED LAB ONLY</strong></div></div><div className="boundary-note"><Icon name="shield-check" /><p>El control plane no ejecuta muestras en el host. El plan de VM sigue siendo declarativo.</p></div></aside>
+        <article className="panel scenario-panel"><div className="panel-heading compact"><div><span className="eyebrow">SCENARIO LIBRARY</span><h3>Threat catalog</h3></div></div><div className="scenario-list">{scenarios.map((item) => <button key={item.id} className={`scenario-row ${item.id === scenario?.id ? 'selected' : ''}`} onClick={() => setSelectedScenario(item.id)}><div className="scenario-symbol"><Icon name="malware" /></div><div className="scenario-main"><strong>{item.name}</strong><span>{item.category} / {item.year}</span></div><span className={`risk risk-${item.risk}`}>{item.risk}</span></button>)}</div></article>
+        <article className="panel terminal-panel"><div className="panel-heading compact"><div><span className="eyebrow">EXECUTION PLAN</span><h3>Guarded lab sequence</h3></div><span className="live-mark"><StatusDot active /> DECLARATIVE</span></div><div className="terminal-window">{plan ? plan.steps.map((step, index) => <div key={step}><time>{String(index + 1).padStart(2, '0')}</time><span className="event-type">PLAN</span><p>{step}</p></div>) : <div><time>--</time><span className="event-type">PLAN</span><p>Create a lab to inspect its execution plan</p></div>}<div className="terminal-prompt"><span>&gt;</span><i /></div></div></article>
+      </section>
+    </>;
+  };
 
-        <div className="sidebar-footer">
-          <div><StatusDot active={system?.networkPolicy === 'isolated-lab-only'} /> LAB NETWORK</div>
-          <span>ISOLATED ONLY</span>
-        </div>
-      </aside>
-
-      <main className="workspace">
-        <header className="topbar">
-          <div>
-            <span className="breadcrumb">LOCALHOST / CONTROL CENTER</span>
-            <h1>{activeNav}</h1>
-          </div>
-          <div className="top-status">
-            <div className="status-pill"><StatusDot active /> API ONLINE</div>
-            <div className="status-pill"><StatusDot active={Boolean(availableHypervisor)} /> HYPERVISOR {availableHypervisor ? 'READY' : 'UNAVAILABLE'}</div>
-            <div className="status-pill guarded"><Icon name="shield-check" size={14} /> HOST GUARDED</div>
-          </div>
-        </header>
-
-        {error && <div className="error-banner">{error}</div>}
-
-        <section className="metrics-grid">
-          <article className="metric-card"><div className="metric-icon"><Icon name="vm" /></div><div><span>HYPERVISOR</span><strong>{availableHypervisor?.label ?? 'NOT DETECTED'}</strong></div></article>
-          <article className="metric-card"><div className="metric-icon"><Icon name="network" /></div><div><span>NETWORK POLICY</span><strong>ISOLATED LAB</strong></div></article>
-          <article className="metric-card"><div className="metric-icon"><Icon name="samples" /></div><div><span>SCENARIOS</span><strong>{String(scenarios.length).padStart(2, '0')}</strong></div></article>
-          <article className="metric-card"><div className="metric-icon"><Icon name="laboratory" /></div><div><span>ACTIVE LABS</span><strong>{String(labs.length).padStart(2, '0')}</strong></div></article>
-        </section>
-
-        <section className="content-grid">
-          <article className="panel lab-panel">
-            <div className="panel-heading">
-              <div><span className="eyebrow">ACTIVE LAB</span><h2>{scenario?.name ?? 'No scenario selected'}</h2></div>
-              <div className={`state-badge state-${activeState.toLowerCase()}`}>{stateLabels[activeState]}</div>
-            </div>
-            <div className="lab-console">
-              <div className="lab-machine">
-                <div className="machine-frame"><Icon name="vm" size={32} /><strong>{activeLab?.vmName ?? 'WINDOWS ANALYSIS VM'}</strong><span>{scenario?.platform ?? 'Windows'} / Disposable guest</span></div>
-                <div className="machine-lines" />
-              </div>
-              <div className="lab-facts">
-                <div><span>SCENARIO</span><strong>{scenario?.id ?? '—'}</strong></div>
-                <div><span>CATEGORY</span><strong>{scenario?.category?.toUpperCase() ?? '—'}</strong></div>
-                <div><span>RISK</span><strong className="danger-text">{scenario?.risk?.toUpperCase() ?? '—'}</strong></div>
-                <div><span>SNAPSHOT</span><strong>{activeLab?.snapshot ?? 'NOT PREPARED'}</strong></div>
-              </div>
-            </div>
-            <div className="action-row">
-              {!activeLab ? (
-                <button className="primary-action" onClick={createLab}><Icon name="laboratory" /> CREATE LAB</button>
-              ) : (
-                <>
-                  <button className="primary-action" onClick={() => action('prepare')}><Icon name="vm" /> PREPARE</button>
-                  <button onClick={() => action('detect')}><Icon name="detection" /> DETECT</button>
-                  <button onClick={() => action('contain')}><Icon name="detection" /> CONTAIN</button>
-                  <button onClick={() => action('remediate')}><Icon name="remediation" /> REMEDIATE</button>
-                  <button onClick={() => action('restore')}><Icon name="restore" /> RESTORE</button>
-                </>
-              )}
-            </div>
-          </article>
-
-          <aside className="panel system-panel">
-            <div className="panel-heading compact"><div><span className="eyebrow">SYSTEM STATUS</span><h3>Host boundary</h3></div></div>
-            <div className="system-list">
-              <div><span>Mode</span><strong>LOCAL ONLY</strong></div>
-              <div><span>Real execution</span><strong>{system?.realExecutionEnabled ? 'ARMED' : 'LOCKED'}</strong></div>
-              <div><span>Host</span><strong>{system?.host.platform ?? '—'} / {system?.host.architecture ?? '—'}</strong></div>
-              <div><span>Network</span><strong>ISOLATED LAB ONLY</strong></div>
-            </div>
-            <div className="boundary-note"><Icon name="shield-check" /><p>El control plane no ejecuta muestras en el host. Los adaptadores de hipervisor están en modo de descubrimiento.</p></div>
-          </aside>
-
-          <article className="panel scenario-panel">
-            <div className="panel-heading compact"><div><span className="eyebrow">SCENARIO LIBRARY</span><h3>Threat catalog</h3></div></div>
-            <div className="scenario-list">
-              {scenarios.map((item) => (
-                <button key={item.id} className={`scenario-row ${item.id === scenario?.id ? 'selected' : ''}`} onClick={() => setSelectedScenario(item.id)}>
-                  <div className="scenario-symbol"><Icon name="malware" /></div>
-                  <div className="scenario-main"><strong>{item.name}</strong><span>{item.category} / {item.year}</span></div>
-                  <span className={`risk risk-${item.risk}`}>{item.risk}</span>
-                </button>
-              ))}
-            </div>
-          </article>
-
-          <article className="panel terminal-panel">
-            <div className="panel-heading compact"><div><span className="eyebrow">EVENT STREAM</span><h3>Control plane telemetry</h3></div><span className="live-mark"><StatusDot active /> LIVE</span></div>
-            <div className="terminal-window">
-              <div><time>00:00:00</time><span className="event-type">SYSTEM</span><p>local control plane initialized</p></div>
-              <div><time>00:00:01</time><span className="event-type">POLICY</span><p>host execution boundary locked</p></div>
-              <div><time>00:00:02</time><span className="event-type">NETWORK</span><p>lab network policy: isolated-lab-only</p></div>
-              {activeLab && <div><time>NOW</time><span className="event-type">LAB</span><p>{activeLab.scenarioName} state changed to {activeLab.state}</p></div>}
-              <div className="terminal-prompt"><span>&gt;</span><i /></div>
-            </div>
-          </article>
-        </section>
-      </main>
-    </div>
-  );
+  return <div className="shell"><aside className="sidebar"><div className="brand"><div className="brand-mark"><Icon name="biohazard" size={24} /></div><div><strong>MALWARE LAB</strong><span>LOCAL RESEARCH SYSTEM</span></div></div><nav>{navSections.map((section) => <section className="nav-section" key={section.label}><div className="nav-heading">{section.label}</div>{section.items.map((item) => <button className={`nav-item ${activeNav === item.label ? 'selected' : ''}`} key={item.label} onClick={() => setActiveNav(item.label)}><Icon name={item.icon} /><span>{item.label}</span></button>)}</section>)}</nav><div className="sidebar-footer"><div><StatusDot active={system?.networkPolicy === 'isolated-lab-only'} /> LAB NETWORK</div><span>ISOLATED ONLY</span></div></aside><main className="workspace"><header className="topbar"><div><span className="breadcrumb">LOCALHOST / CONTROL CENTER</span><h1>{activeNav}</h1></div><div className="top-status"><div className="status-pill"><StatusDot active /> API ONLINE</div><div className="status-pill"><StatusDot active={Boolean(availableHypervisor)} /> HYPERVISOR {availableHypervisor ? 'READY' : 'UNAVAILABLE'}</div><div className="status-pill guarded"><Icon name="shield-check" size={14} /> HOST GUARDED</div></div></header>{error && <div className="error-banner">{error}</div>}{renderWorkspace()}</main></div>;
 }
