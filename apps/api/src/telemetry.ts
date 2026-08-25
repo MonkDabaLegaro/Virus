@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { buildAnalysisReport } from '@malware-lab/analysis';
 import { FixtureTelemetryCollector, WindowsObservationCollector, listCollectors, type WindowsObservationCollectorInput } from '@malware-lab/collectors';
@@ -6,6 +6,23 @@ import { correlateDetections, detect } from '@malware-lab/detection';
 import { renderMarkdownReport } from '@malware-lab/reporting';
 import { TelemetryStore } from '@malware-lab/telemetry';
 import type { AnalysisReport, TelemetryEvent, TelemetryKind, TelemetrySummary } from '@malware-lab/shared-types';
+
+export async function resolveScenarioFixturePath(repoRoot: string, scenarioId: string): Promise<string> {
+  const id = scenarioId.trim();
+  if (!id || id.length > 120 || id === '.' || id === '..' || id.includes('/') || id.includes('\\')) throw new Error('Invalid scenario fixture id');
+
+  const scenarioRoot = path.join(repoRoot, 'scenarios');
+  const entries = await readdir(scenarioRoot, { recursive: true });
+  const matches = entries
+    .filter((entry) => path.basename(entry) === 'telemetry.json')
+    .filter((entry) => path.basename(path.dirname(entry)) === 'fixtures')
+    .filter((entry) => path.basename(path.dirname(path.dirname(entry))) === id)
+    .map((entry) => path.join(scenarioRoot, entry));
+
+  if (matches.length === 0) throw new Error('Scenario fixture not found');
+  if (matches.length > 1) throw new Error('Ambiguous scenario fixture');
+  return matches[0]!;
+}
 
 export function createTelemetryService(repoRoot: string) {
   const store = new TelemetryStore();
@@ -34,7 +51,7 @@ export function createTelemetryService(repoRoot: string) {
       return listCollectors();
     },
     async replay(scenarioId: string) {
-      const fixturePath = path.join(repoRoot, 'scenarios', 'ransomware', scenarioId, 'fixtures', 'telemetry.json');
+      const fixturePath = await resolveScenarioFixturePath(repoRoot, scenarioId);
       const raw = await readFile(fixturePath, 'utf8');
       const result = await fixtureCollector.collect({ scenarioId, events: JSON.parse(raw) as TelemetryEvent[] });
       store.replace(result.events);
