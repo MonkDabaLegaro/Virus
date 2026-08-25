@@ -23,6 +23,14 @@ test('fixture collector preserves event semantics and adds collector provenance'
   assert.deepEqual(result.events[0]?.tags, ['fixture', 'synthetic', 'collector:fixture']);
 });
 
+test('fixture collector rejects malformed telemetry instead of trusting JSON casts', async () => {
+  const collector = new FixtureTelemetryCollector();
+  await assert.rejects(
+    collector.collect({ scenarioId: 'wannacry', events: [{ id: 'bad', scenarioId: 'wannacry', timestamp: 'not-a-date', kind: 'process', action: 'start', tags: [] } as any] }),
+    /Invalid fixture telemetry event/
+  );
+});
+
 test('windows collector normalizes structured process, filesystem, registry and network observations', async () => {
   const collector = new WindowsObservationCollector();
   const result = await collector.collect({
