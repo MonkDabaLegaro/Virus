@@ -128,9 +128,7 @@ function validateObservation(observation: WindowsObservation): void {
   if (!validTimestamp(observation.timestamp)) throw new Error('Invalid Windows observation');
 
   if (observation.kind === 'process') {
-    if (!Number.isInteger(observation.pid) || observation.pid < 0 || (observation.ppid !== null && (!Number.isInteger(observation.ppid) || observation.ppid < 0)) || !validText(observation.image, 1024) || !validOptionalText(observation.commandLine, 4096)) {
-      throw new Error('Invalid Windows observation');
-    }
+    if (!Number.isInteger(observation.pid) || observation.pid < 0 || (observation.ppid !== null && (!Number.isInteger(observation.ppid) || observation.ppid < 0)) || !validText(observation.image, 1024) || !validOptionalText(observation.commandLine, 4096)) throw new Error('Invalid Windows observation');
     return;
   }
 
@@ -144,9 +142,7 @@ function validateObservation(observation: WindowsObservation): void {
     return;
   }
 
-  if (!validText(observation.destinationIp, 128) || !Number.isInteger(observation.destinationPort) || observation.destinationPort < 1 || observation.destinationPort > 65535) {
-    throw new Error('Invalid Windows observation');
-  }
+  if (!validText(observation.destinationIp, 128) || !Number.isInteger(observation.destinationPort) || observation.destinationPort < 1 || observation.destinationPort > 65535) throw new Error('Invalid Windows observation');
 }
 
 function provenance(tags: string[], marker: string): string[] {
@@ -186,15 +182,9 @@ export class WindowsObservationCollector implements TelemetryCollector<WindowsOb
         tags: ['collector:windows-observation', 'source:imported-observation']
       };
 
-      if (observation.kind === 'process') {
-        return { ...base, kind: 'process', action: observation.action, process: { pid: observation.pid, ppid: observation.ppid, image: observation.image, ...(observation.commandLine ? { commandLine: observation.commandLine } : {}) } };
-      }
-      if (observation.kind === 'filesystem') {
-        return { ...base, kind: 'filesystem', action: observation.action, file: { path: observation.path, ...(observation.extension ? { extension: observation.extension } : {}) } };
-      }
-      if (observation.kind === 'registry') {
-        return { ...base, kind: 'registry', action: observation.action, registry: { key: observation.key, ...(observation.valueName ? { valueName: observation.valueName } : {}) } };
-      }
+      if (observation.kind === 'process') return { ...base, kind: 'process', action: observation.action, process: { pid: observation.pid, ppid: observation.ppid, image: observation.image, ...(observation.commandLine ? { commandLine: observation.commandLine } : {}) } };
+      if (observation.kind === 'filesystem') return { ...base, kind: 'filesystem', action: observation.action, file: { path: observation.path, ...(observation.extension ? { extension: observation.extension } : {}) } };
+      if (observation.kind === 'registry') return { ...base, kind: 'registry', action: observation.action, registry: { key: observation.key, ...(observation.valueName ? { valueName: observation.valueName } : {}) } };
       return { ...base, kind: 'network', action: observation.action, network: { protocol: observation.protocol, destinationIp: observation.destinationIp, destinationPort: observation.destinationPort } };
     });
 
@@ -205,6 +195,11 @@ export class WindowsObservationCollector implements TelemetryCollector<WindowsOb
 export function listCollectors(): CollectorDescriptor[] {
   return [
     { id: 'fixture', label: 'Synthetic Fixture Replay', platform: 'any', mode: 'replay', guestExecution: false, hostCollection: false },
-    { id: 'windows-observation', label: 'Windows Observation Import', platform: 'windows', mode: 'import', guestExecution: false, hostCollection: false }
+    { id: 'windows-observation', label: 'Windows Observation Import', platform: 'windows', mode: 'import', guestExecution: false, hostCollection: false },
+    { id: 'sysmon-export', label: 'Sysmon JSON Export Adapter', platform: 'windows', mode: 'import', guestExecution: false, hostCollection: false },
+    { id: 'procmon-export', label: 'Procmon CSV/JSON Export Adapter', platform: 'windows', mode: 'import', guestExecution: false, hostCollection: false },
+    { id: 'network-flow-export', label: 'Network Flow Export Adapter', platform: 'windows', mode: 'import', guestExecution: false, hostCollection: false }
   ];
 }
+
+export { adaptNetworkFlowExport, adaptProcmonExport, adaptSysmonExport } from './adapters.ts';
