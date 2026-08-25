@@ -1,11 +1,27 @@
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { buildAnalysisReport } from '@malware-lab/analysis';
-import { FixtureTelemetryCollector, WindowsObservationCollector, listCollectors, type WindowsObservationCollectorInput } from '@malware-lab/collectors';
+import {
+  FixtureTelemetryCollector,
+  WindowsObservationCollector,
+  adaptNetworkFlowExport,
+  adaptProcmonExport,
+  adaptSysmonExport,
+  listCollectors,
+  type WindowsObservationCollectorInput
+} from '@malware-lab/collectors';
 import { correlateDetections, detect } from '@malware-lab/detection';
 import { renderMarkdownReport } from '@malware-lab/reporting';
 import { TelemetryStore } from '@malware-lab/telemetry';
-import type { AnalysisReport, TelemetryEvent, TelemetryKind, TelemetrySummary } from '@malware-lab/shared-types';
+import type { AnalysisReport, TelemetryKind, TelemetrySummary } from '@malware-lab/shared-types';
+
+export type ExportedEvidenceFormat = 'sysmon-json' | 'procmon-csv' | 'procmon-json' | 'network-flow-json';
+export interface ExportedEvidenceImport {
+  scenarioId: string;
+  format: ExportedEvidenceFormat;
+  data: unknown;
+  procmonDay?: string;
+}
 
 export async function resolveScenarioFixturePath(repoRoot: string, scenarioId: string): Promise<string> {
   const id = scenarioId.trim();
@@ -22,6 +38,24 @@ export async function resolveScenarioFixturePath(repoRoot: string, scenarioId: s
   if (matches.length === 0) throw new Error('Scenario fixture not found');
   if (matches.length > 1) throw new Error('Ambiguous scenario fixture');
   return matches[0]!;
+}
+
+function adaptExportedEvidence(input: ExportedEvidenceImport) {
+  if (input.format === 'sysmon-json') {
+    if (!Array.isArray(input.data)) throw new Error('Invalid Sysmon export');
+    return adaptSysmonExport(input.data);
+  }
+  if (input.format === 'network-flow-json') {
+    if (!Array.isArray(input.data)) throw new Error('Invalid network flow export');
+    return adaptNetworkFlowExport(input.data);
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.procmonDay ?? '')) throw new Error('Invalid Procmon export');
+  if (input.format === 'procmon-csv') {
+    if (typeof input.data !== 'string') throw new Error('Invalid Procmon export');
+    return adaptProcmonExport(input.data, input.procmonDay!);
+  }
+  if (!Array.isArray(input.data)) throw new Error('Invalid Procmon export');
+  return adaptProcmonExport(input.data, input.procmonDay!);
 }
 
 export function createTelemetryService(repoRoot: string) {
@@ -53,7 +87,9 @@ export function createTelemetryService(repoRoot: string) {
     async replay(scenarioId: string) {
       const fixturePath = await resolveScenarioFixturePath(repoRoot, scenarioId);
       const raw = await readFile(fixturePath, 'utf8');
-      const result = await fixtureCollector.collect({ scenarioId, events: JSON.parse(raw) as TelemetryEvent[] });
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) throw new Error('Invalid fixture telemetry event');
+      const result = await fixtureCollector.collect({ scenarioId, events: parsed });
       store.replace(result.events);
       return result.events;
     },
@@ -61,6 +97,12 @@ export function createTelemetryService(repoRoot: string) {
       const result = await windowsCollector.collect(input);
       store.replace(result.events);
       return result;
+    },
+    async importExported(input: ExportedEvidenceImport) {
+      const observations = adaptExportedEvidence(input);
+      const result = await windowsCollector.collect({ scenarioId: input.scenarioId, observations });
+      store.replace(result.events);
+      return { ...result, adapter: input.format, observations: observations.length };
     },
     events(kind?: TelemetryKind) {
       return store.list(kind);
