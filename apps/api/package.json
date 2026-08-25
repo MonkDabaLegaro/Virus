@@ -11,6 +11,7 @@
   "dependencies": {
     "@fastify/cors": "^11.1.0",
     "@malware-lab/analysis": "0.1.0",
+    "@malware-lab/collectors": "0.1.0",
     "@malware-lab/detection": "0.1.0",
     "@malware-lab/hypervisor": "0.1.0",
     "@malware-lab/lab-core": "0.1.0",
