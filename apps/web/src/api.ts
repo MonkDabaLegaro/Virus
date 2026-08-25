@@ -30,7 +30,10 @@ export interface CollectorImportResult {
   source:'fixture'|'imported-observation';
   scenarioId:string;
   events:TelemetryEvent[];
+  adapter?:'sysmon-json'|'procmon-csv'|'procmon-json'|'network-flow-json';
+  observations?:number;
 }
+export type ExportedEvidenceFormat='sysmon-json'|'procmon-csv'|'procmon-json'|'network-flow-json';
 
 async function json<T>(url:string,init?:RequestInit):Promise<T>{
   const response=await fetch(url,{...init,headers:{'content-type':'application/json',...(init?.headers??{})}});
@@ -54,6 +57,7 @@ export const api={
   analysisReportMarkdown:()=>text('/api/analysis/report.md'),
   replayTelemetry:(scenarioId:string)=>json<TelemetryEvent[]>(`/api/telemetry/replay/${encodeURIComponent(scenarioId)}`,{method:'POST'}),
   importWindowsObservations:(scenarioId:string,observations:unknown[])=>json<CollectorImportResult>('/api/telemetry/import/windows',{method:'POST',body:JSON.stringify({scenarioId,observations})}),
+  importExportedEvidence:(scenarioId:string,format:ExportedEvidenceFormat,data:unknown,procmonDay?:string)=>json<CollectorImportResult>('/api/telemetry/import/exported',{method:'POST',body:JSON.stringify({scenarioId,format,data,...(procmonDay?{procmonDay}:{})})}),
   vms:()=>json<VmDescriptor[]>('/api/vms'),
   vm:(providerId:string,vmId:string)=>json<VmInspection>(`/api/vms/${encodeURIComponent(providerId)}/${encodeURIComponent(vmId)}`),
   validateVm:(providerId:'virtualbox'|'hyper-v',vmId:string,profileId?:string)=>json<VmValidationReport>('/api/vms/validate',{method:'POST',body:JSON.stringify({providerId,vmId,...(profileId?{profileId}:{})})}),
