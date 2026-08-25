@@ -1,12 +1,16 @@
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { buildAnalysisReport } from '@malware-lab/analysis';
+import { FixtureTelemetryCollector, WindowsObservationCollector, listCollectors, type WindowsObservationCollectorInput } from '@malware-lab/collectors';
 import { correlateDetections, detect } from '@malware-lab/detection';
 import { renderMarkdownReport } from '@malware-lab/reporting';
 import { TelemetryStore } from '@malware-lab/telemetry';
-import type { AnalysisReport, TelemetryKind, TelemetrySummary } from '@malware-lab/shared-types';
+import type { AnalysisReport, TelemetryEvent, TelemetryKind, TelemetrySummary } from '@malware-lab/shared-types';
 
 export function createTelemetryService(repoRoot: string) {
   const store = new TelemetryStore();
+  const fixtureCollector = new FixtureTelemetryCollector();
+  const windowsCollector = new WindowsObservationCollector();
 
   function findings() {
     return detect(store.list());
@@ -26,9 +30,20 @@ export function createTelemetryService(repoRoot: string) {
   }
 
   return {
+    collectors() {
+      return listCollectors();
+    },
     async replay(scenarioId: string) {
-      await store.loadFixture(path.join(repoRoot, 'scenarios', 'ransomware', scenarioId, 'fixtures', 'telemetry.json'));
-      return store.list();
+      const fixturePath = path.join(repoRoot, 'scenarios', 'ransomware', scenarioId, 'fixtures', 'telemetry.json');
+      const raw = await readFile(fixturePath, 'utf8');
+      const result = await fixtureCollector.collect({ scenarioId, events: JSON.parse(raw) as TelemetryEvent[] });
+      store.replace(result.events);
+      return result;
+    },
+    async importWindows(input: WindowsObservationCollectorInput) {
+      const result = await windowsCollector.collect(input);
+      store.replace(result.events);
+      return result;
     },
     events(kind?: TelemetryKind) {
       return store.list(kind);
