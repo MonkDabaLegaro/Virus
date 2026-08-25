@@ -6,7 +6,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { LabRegistry } from '@malware-lab/lab-core';
-import { probeHypervisors } from '@malware-lab/hypervisor';
+import {
+  HypervisorOperationError,
+  inspectVirtualMachine,
+  listVirtualMachines,
+  probeHypervisors,
+  restoreBaselineSnapshot,
+  validateVirtualMachine
+} from '@malware-lab/hypervisor';
 import { SampleRegistry } from '@malware-lab/sample-registry';
 import type { LabExecutionPlan, LabProfile, ScenarioSummary } from '@malware-lab/shared-types';
 
@@ -22,7 +29,7 @@ const manifestSchema = z.object({
   id: z.string(), name: z.string(), category: z.enum(['ransomware', 'spyware', 'trojan', 'worm']), year: z.number().int(), platform: z.string(), risk: z.enum(['low', 'medium', 'high', 'critical']), description: z.string(), executionPolicy: z.literal('vm-only')
 });
 const profileSchema = z.object({
-  id: z.string(), label: z.string(), guestOs: z.string(), architecture: z.string(), cpuCount: z.number().int().positive(), memoryMb: z.number().int().positive(), disposable: z.literal(true), baselineSnapshot: z.string(),
+  id: z.string(), label: z.string(), vmName: z.string().min(1), guestOs: z.string(), architecture: z.string(), cpuCount: z.number().int().positive(), memoryMb: z.number().int().positive(), disposable: z.literal(true), baselineSnapshot: z.string(),
   network: z.object({ mode: z.literal('internal'), name: z.string(), hostAccess: z.literal(false), internetAccess: z.literal(false) }),
   integrations: z.object({ sharedFolders: z.literal(false), clipboard: z.literal(false), dragAndDrop: z.literal(false), usbPassthrough: z.literal(false) })
 });
@@ -42,6 +49,12 @@ async function loadLabProfile(): Promise<LabProfile> {
   return profileSchema.parse(JSON.parse(raw));
 }
 
+async function resolveProfile(profileId?: string): Promise<LabProfile> {
+  const profile = await loadLabProfile();
+  if (profileId && profile.id !== profileId) throw new Error('Lab profile not found');
+  return profile;
+}
+
 app.get('/health', async () => ({ status: 'ok' }));
 app.get('/api/system', async () => ({
   host: { platform: os.platform(), architecture: os.arch(), hostname: os.hostname() },
@@ -58,16 +71,22 @@ app.get<{ Params: { id: string } }>('/api/scenarios/:id', async (request, reply)
 });
 app.get('/api/samples', async () => sampleRegistry.list());
 app.post('/api/samples', async (request, reply) => {
-  const body = z.object({
-    sha256: z.string().regex(/^[a-f0-9]{64}$/i),
-    family: z.string().min(1).max(80),
-    aliases: z.array(z.string().min(1).max(80)).max(20).optional(),
-    sourceReference: z.string().max(500).nullable().optional()
-  }).parse(request.body);
-  const record = await sampleRegistry.register(body);
-  return reply.code(201).send(record);
+  const body = z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/i), family: z.string().min(1).max(80), aliases: z.array(z.string().min(1).max(80)).max(20).optional(), sourceReference: z.string().max(500).nullable().optional() }).parse(request.body);
+  return reply.code(201).send(await sampleRegistry.register(body));
 });
 app.get('/api/lab-profiles', async () => [await loadLabProfile()]);
+
+app.get('/api/vms', async () => listVirtualMachines());
+app.get<{ Params: { providerId: string; vmId: string } }>('/api/vms/:providerId/:vmId', async (request) => inspectVirtualMachine(request.params.providerId, request.params.vmId));
+app.post('/api/vms/validate', async (request) => {
+  const body = z.object({ providerId: z.enum(['virtualbox', 'hyper-v']), vmId: z.string().min(1), profileId: z.string().optional() }).parse(request.body);
+  return validateVirtualMachine(body.providerId, body.vmId, await resolveProfile(body.profileId));
+});
+app.post('/api/vms/restore-baseline', async (request) => {
+  const body = z.object({ providerId: z.enum(['virtualbox', 'hyper-v']), vmId: z.string().min(1), profileId: z.string().optional() }).parse(request.body);
+  return restoreBaselineSnapshot(body.providerId, body.vmId, await resolveProfile(body.profileId));
+});
+
 app.get('/api/labs', async () => registry.list());
 app.post('/api/labs', async (request, reply) => {
   const body = z.object({ scenarioId: z.string() }).parse(request.body);
@@ -83,7 +102,7 @@ app.get<{ Params: { id: string } }>('/api/labs/:id/plan', async (request, reply)
   const plan: LabExecutionPlan = {
     labId: lab.id,
     scenarioId: lab.scenarioId,
-    hypervisorId: hypervisors.find((item) => item.available)?.id ?? null,
+    hypervisorId: hypervisors.find((item) => item.available && (item.id === 'virtualbox' || item.id === 'hyper-v'))?.id ?? null,
     profile,
     realExecutionEnabled: false,
     steps: ['restore-clean-snapshot', 'verify-isolated-network', 'verify-host-integrations-disabled', 'stage-sample-through-quarantine-boundary', 'start-telemetry', 'manual-execution-gate', 'collect-artifacts', 'restore-clean-snapshot']
@@ -92,12 +111,19 @@ app.get<{ Params: { id: string } }>('/api/labs/:id/plan', async (request, reply)
 });
 app.post<{ Params: { id: string } }>('/api/labs/:id/actions', async (request, reply) => {
   const body = z.object({ action: z.enum(['prepare', 'detect', 'contain', 'remediate', 'restore']) }).parse(request.body);
-  const updated = registry.transition(request.params.id, body.action);
+  const profile = await loadLabProfile();
+  const updated = registry.transition(request.params.id, body.action, body.action === 'prepare' ? { vmName: profile.vmName, snapshot: profile.baselineSnapshot } : undefined);
   if (!updated) return reply.code(404).send({ message: 'Lab not found' });
   return updated;
 });
+
 app.setErrorHandler((error, _request, reply) => {
   if (error instanceof z.ZodError) return reply.code(400).send({ message: 'Invalid request', issues: error.issues });
+  if (error instanceof HypervisorOperationError) {
+    const status = error.code === 'vm-not-found' ? 404 : error.code === 'unsafe-state' || error.code === 'snapshot-missing' ? 409 : 400;
+    return reply.code(status).send({ message: error.message, code: error.code });
+  }
+  if (error instanceof Error && error.message === 'Lab profile not found') return reply.code(404).send({ message: error.message });
   if (error instanceof Error && error.message === 'Invalid SHA-256') return reply.code(400).send({ message: error.message });
   app.log.error(error);
   return reply.code(500).send({ message: 'Internal control plane error' });

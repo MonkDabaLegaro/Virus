@@ -1,6 +1,7 @@
 {
   "id": "windows-analysis",
-  "label": "Windows Disposable Analysis Guest",
+  "label": "Disposable Windows Analysis Guest",
+  "vmName": "malware-lab-win-analysis",
   "guestOs": "Windows",
   "architecture": "x86_64",
   "cpuCount": 2,
