@@ -10,16 +10,13 @@ Current package:
 packages/collectors/
   src/index.ts
   src/index.test.ts
+  src/adapters.ts
+  src/adapters.test.ts
 ```
 
 ## Collector contract
 
-Every collector exposes:
-
-- a stable collector ID;
-- a source classification;
-- a `collect(input)` method;
-- a normalized `CollectorResult` containing `TelemetryEvent[]`.
+Every collector exposes a stable collector ID, source classification, `collect(input)` method and normalized `CollectorResult` containing `TelemetryEvent[]`.
 
 Every imported event receives provenance tags so downstream analysis can distinguish synthetic fixture replay from imported observations.
 
@@ -27,69 +24,87 @@ Every imported event receives provenance tags so downstream analysis can disting
 
 ### `fixture`
 
-Source: `fixture`
-
-Purpose: load repository-owned synthetic telemetry fixtures through the same normalization boundary used by other evidence sources.
-
-Safety properties:
-
-- runtime validation of event structure;
-- scenario ID consistency check;
-- maximum 5,000 events per replay;
-- adds `collector:fixture` provenance;
-- no guest or host execution.
-
-Fixtures are resolved by scenario ID across all malware categories. Duplicate matching fixture IDs are rejected as ambiguous.
+Loads repository-owned synthetic telemetry fixtures through runtime validation. It enforces scenario consistency, a maximum of 5,000 events and `collector:fixture` provenance. Fixtures are resolved across all scenario categories and duplicate IDs are rejected as ambiguous.
 
 ### `windows-observation`
 
-Source: `imported-observation`
+Normalizes already-observed Windows evidence supplied as structured JSON. Supported observations are process lifecycle, filesystem mutations, Registry mutations and network connect/listen events.
 
-Purpose: normalize already-observed Windows evidence supplied as structured JSON.
+The collector validates timestamps, PIDs, ports and field lengths, generates deterministic event IDs, adds `collector:windows-observation` and `source:imported-observation`, and performs no PowerShell, WMI, WinRM, ETW, packet capture or guest-agent execution.
 
-Supported observations:
+## Export adapters
 
-- process start/stop;
-- filesystem create/modify/rename/delete;
-- Registry set/delete value and create/delete key;
-- network connect/listen observations.
+Adapters translate exports from defensive tooling into `WindowsObservation[]`. They are pure parsers: no tool invocation, filesystem traversal, host inspection or guest communication occurs.
 
-Safety properties:
+### `sysmon-json`
 
-- maximum 5,000 observations per request;
-- timestamps, process IDs, ports and field lengths are validated;
-- deterministic event IDs within each import;
-- adds `collector:windows-observation` and `source:imported-observation` provenance;
-- performs no PowerShell, WMI, WinRM, ETW, packet capture or guest-agent execution.
+Supported exported Sysmon event IDs:
+
+- `1` Process Create -> process `start`;
+- `3` Network Connection -> network `connect`;
+- `5` Process Terminated -> process `stop`;
+- `11` File Create -> filesystem `create`;
+- `12` Registry Object Create/Delete -> currently normalized conservatively as `create-key` when exported as a supported object event;
+- `13` Registry Value Set -> Registry `set-value`.
+
+Unsupported event IDs are ignored rather than assigned speculative semantics. Supported rows with malformed required fields are rejected.
+
+### `procmon-csv` / `procmon-json`
+
+Supported operations are deliberately conservative:
+
+- `WriteFile` -> filesystem `modify`;
+- `SetRenameInformationFile` / `SetRenameInformationEx` -> filesystem `rename`;
+- `RegSetValue` -> Registry `set-value`;
+- `RegDeleteValue` -> Registry `delete-value`;
+- `RegCreateKey` -> Registry `create-key`;
+- `RegDeleteKey` -> Registry `delete-key`.
+
+`CreateFile` is intentionally not mapped because Process Monitor uses it for opens as well as creates; treating it as a file creation would overstate the evidence.
+
+Procmon exports require the capture day because the common CSV `Time of Day` field has no date component.
+
+### `network-flow-json`
+
+Accepts generic flow rows using `timestamp`, `protocol`, `destinationIp`, `destinationPort`, plus Zeek-style aliases `ts`, `proto`, `id.resp_h`, `id.resp_p`. Rows normalize to network `connect` observations.
 
 ## HTTP surface
 
 ```text
 GET  /api/collectors
 POST /api/telemetry/import/windows
+POST /api/telemetry/import/exported
 POST /api/telemetry/replay/:scenarioId
 ```
 
-The Windows import body is:
+Exported evidence request:
 
 ```json
 {
   "scenarioId": "wannacry",
-  "observations": [
+  "format": "sysmon-json",
+  "data": [
     {
-      "kind": "process",
-      "timestamp": "2026-08-25T18:00:00.000Z",
-      "action": "start",
-      "pid": 4100,
-      "ppid": 900,
-      "image": "C:\\Lab\\sample.exe"
+      "EventID": 3,
+      "UtcTime": "2026-08-25 18:00:01.000",
+      "Protocol": "tcp",
+      "DestinationIp": "192.0.2.25",
+      "DestinationPort": "445"
     }
   ]
 }
 ```
 
-A successful import replaces the active in-memory telemetry session. It does not append observations from unrelated scenarios.
+For `procmon-csv` and `procmon-json`, also send:
 
-## Next adapters
+```json
+{
+  "procmonDay": "2026-08-25"
+}
+```
 
-Future adapters may consume exports from defensive guest tooling, but they must preserve the same boundary: external tooling produces evidence, the collector only parses and normalizes it. Any active guest instrumentation or execution requires a separate reviewed capability and must not be added implicitly to this package.
+A successful import replaces the active in-memory telemetry session and then flows through the existing detection, analysis and reporting pipeline.
+
+## Safety boundary
+
+These adapters ingest evidence that has already been exported elsewhere. They do not deploy or configure Sysmon/Procmon, execute commands in the guest, transfer samples, inspect credentials, capture keystrokes, or start network sniffing. Active instrumentation requires a separate reviewed capability and must not be introduced implicitly through this package.
