@@ -1,0 +1,8 @@
+{
+  "kill_switch_domain": "www.iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com",
+  "ransom_amount_btc": 0.05,
+  "timer_hours": 72,
+  "extensions_to_encrypt": [".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".pdf", ".txt", ".jpg", ".png"],
+  "note_file": "README.txt",
+  "bitcoin_address": "1Mz7153HMuxXTuR2R1t78mGSdzaAtNbBWX"
+}

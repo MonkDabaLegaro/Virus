@@ -1,0 +1,8 @@
+{
+  "c2_servers": [
+    "http://c2.example.com",
+    "http://backup.c2.com"
+  ],
+  "port": 80,
+  "timeout": 30
+}

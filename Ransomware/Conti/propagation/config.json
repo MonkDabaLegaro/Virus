@@ -1,0 +1,10 @@
+{
+  "subnet": "192.168.1.0/24",
+  "ports": [3389, 445, 135],
+  "credentials": {
+    "username": "administrator",
+    "password": "P@ssw0rd"
+  },
+  "tools": ["psexec", "wmic"],
+  "max_hosts": 100
+}

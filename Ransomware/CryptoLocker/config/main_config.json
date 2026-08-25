@@ -1,0 +1,7 @@
+{
+  "ransom_amount": 500,
+  "currency": "USD",
+  "deadline_days": 7,
+  "extensions": [".doc", ".xls", ".pdf"],
+  "kill_switch": "http://example.com/kill"
+}

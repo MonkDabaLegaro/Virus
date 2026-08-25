@@ -1,0 +1,10 @@
+{
+  "c2_servers": [
+    "192.0.2.1:80",
+    "192.0.2.2:80",
+    "www.malicious-site.com:443"
+  ],
+  "fallback_tor": "http://ianx6h6xmaujyarx.onion/command",
+  "user_agent": "WannaCry/1.0",
+  "timeout": 30
+}

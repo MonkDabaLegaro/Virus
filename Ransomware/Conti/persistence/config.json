@@ -1,0 +1,7 @@
+{
+  "registry_key": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+  "exe_path": "C:\\Windows\\System32\\conti.exe",
+  "task_name": "ContiPersistence",
+  "task_schedule": "ONLOGON",
+  "service_name": "ContiService"
+}
