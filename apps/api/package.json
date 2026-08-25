@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsup src/index.ts --format esm --dts --no-external @malware-lab/analysis --no-external @malware-lab/detection --no-external @malware-lab/hypervisor --no-external @malware-lab/lab-core --no-external @malware-lab/reporting --no-external @malware-lab/sample-registry --no-external @malware-lab/shared-types --no-external @malware-lab/telemetry",
+    "build": "tsup src/index.ts --format esm",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
