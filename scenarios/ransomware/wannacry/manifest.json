@@ -1,0 +1,12 @@
+{
+  "id": "wannacry",
+  "name": "WannaCry",
+  "category": "ransomware",
+  "year": 2017,
+  "platform": "Windows",
+  "risk": "critical",
+  "description": "Historical ransomware scenario for static analysis, telemetry study, detection, containment and remediation exercises.",
+  "executionPolicy": "vm-only",
+  "sample": { "required": true, "embedded": false, "sha256": null, "storage": "external-quarantine" },
+  "environment": { "guest": "disposable-windows-vm", "network": "isolated", "baselineSnapshot": "clean-baseline" }
+}

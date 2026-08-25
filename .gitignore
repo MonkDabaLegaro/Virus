@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.vite/
+*.log
+.env
+.env.*
+!.env.example
+coverage/
+.DS_Store
+Thumbs.db
+
+# Malware samples are never committed.
+samples/
+quarantine/
+*.vir
