@@ -21,6 +21,13 @@ const telemetry = createTelemetryService(repoRoot);
 
 const manifestSchema = z.object({ id:z.string(), name:z.string(), category:z.enum(['ransomware','spyware','trojan','worm']), year:z.number().int(), platform:z.string(), risk:z.enum(['low','medium','high','critical']), description:z.string(), executionPolicy:z.literal('vm-only') });
 const profileSchema = z.object({ id:z.string(), label:z.string(), vmName:z.string().min(1), guestOs:z.string(), architecture:z.string(), cpuCount:z.number().int().positive(), memoryMb:z.number().int().positive(), disposable:z.literal(true), baselineSnapshot:z.string(), network:z.object({mode:z.literal('internal'),name:z.string(),hostAccess:z.literal(false),internetAccess:z.literal(false)}), integrations:z.object({sharedFolders:z.literal(false),clipboard:z.literal(false),dragAndDrop:z.literal(false),usbPassthrough:z.literal(false)}) });
+const timestampSchema = z.string().max(64).refine((value)=>Number.isFinite(Date.parse(value)), 'Invalid timestamp');
+const windowsObservationSchema = z.discriminatedUnion('kind', [
+  z.object({kind:z.literal('process'),timestamp:timestampSchema,action:z.enum(['start','stop']),pid:z.number().int().nonnegative(),ppid:z.number().int().nonnegative().nullable(),image:z.string().min(1).max(1024),commandLine:z.string().max(4096).optional()}),
+  z.object({kind:z.literal('filesystem'),timestamp:timestampSchema,action:z.enum(['create','modify','rename','delete']),path:z.string().min(1).max(4096),extension:z.string().max(128).optional()}),
+  z.object({kind:z.literal('registry'),timestamp:timestampSchema,action:z.enum(['set-value','delete-value','create-key','delete-key']),key:z.string().min(1).max(4096),valueName:z.string().max(1024).optional()}),
+  z.object({kind:z.literal('network'),timestamp:timestampSchema,action:z.enum(['connect','listen']),protocol:z.enum(['tcp','udp']),destinationIp:z.string().min(1).max(128),destinationPort:z.number().int().min(1).max(65535)})
+]);
 async function loadScenarios():Promise<ScenarioSummary[]>{ const files=await readdir(scenarioRoot,{recursive:true}); const manifests=files.filter(e=>e.endsWith('manifest.json')); return (await Promise.all(manifests.map(async e=>manifestSchema.parse(JSON.parse(await readFile(path.join(scenarioRoot,e),'utf8')))))).sort((a,b)=>a.name.localeCompare(b.name)); }
 async function loadLabProfile():Promise<LabProfile>{ return profileSchema.parse(JSON.parse(await readFile(path.join(repoRoot,'lab-profiles','windows-analysis.json'),'utf8'))); }
 async function resolveProfile(profileId?:string){ const p=await loadLabProfile(); if(profileId&&p.id!==profileId) throw new Error('Lab profile not found'); return p; }
@@ -38,7 +45,14 @@ app.get<{Params:{providerId:string;vmId:string}}>('/api/vms/:providerId/:vmId',a
 app.post('/api/vms/validate',async req=>{ const body=z.object({providerId:z.enum(['virtualbox','hyper-v']),vmId:z.string().min(1),profileId:z.string().optional()}).parse(req.body); return validateVirtualMachine(body.providerId,body.vmId,await resolveProfile(body.profileId)); });
 app.post('/api/vms/restore-baseline',async req=>{ const body=z.object({providerId:z.enum(['virtualbox','hyper-v']),vmId:z.string().min(1),profileId:z.string().optional()}).parse(req.body); return restoreBaselineSnapshot(body.providerId,body.vmId,await resolveProfile(body.profileId)); });
 
+app.get('/api/collectors',async()=>telemetry.collectors());
 app.post<{Params:{scenarioId:string}}>('/api/telemetry/replay/:scenarioId',async(req,reply)=>{ const scenario=(await loadScenarios()).find(x=>x.id===req.params.scenarioId); if(!scenario)return reply.code(404).send({message:'Scenario not found'}); return telemetry.replay(scenario.id); });
+app.post('/api/telemetry/import/windows',async(req,reply)=>{
+  const body=z.object({scenarioId:z.string().min(1).max(120),observations:z.array(windowsObservationSchema).max(5000)}).parse(req.body);
+  const scenario=(await loadScenarios()).find(x=>x.id===body.scenarioId);
+  if(!scenario)return reply.code(404).send({message:'Scenario not found'});
+  return reply.code(202).send(await telemetry.importWindows({scenarioId:scenario.id,observations:body.observations}));
+});
 app.get('/api/telemetry/events',async req=>{ const query=z.object({kind:z.enum(['process','filesystem','registry','network']).optional()}).parse(req.query); return telemetry.events(query.kind as TelemetryKind|undefined); });
 app.get('/api/telemetry/summary',async()=>telemetry.summary());
 app.get('/api/detections',async()=>telemetry.findings());
