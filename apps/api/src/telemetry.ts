@@ -38,7 +38,7 @@ export function createTelemetryService(repoRoot: string) {
       const raw = await readFile(fixturePath, 'utf8');
       const result = await fixtureCollector.collect({ scenarioId, events: JSON.parse(raw) as TelemetryEvent[] });
       store.replace(result.events);
-      return result;
+      return result.events;
     },
     async importWindows(input: WindowsObservationCollectorInput) {
       const result = await windowsCollector.collect(input);
