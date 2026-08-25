@@ -14,7 +14,10 @@ const iconPaths = {
   sample: '/icons/file-search.svg',
   registry: '/icons/database.svg',
   malware: '/icons/biohazard.svg',
-  file: '/icons/file-search.svg'
+  file: '/icons/file-search.svg',
+  'shield-check': '/icons/shield-check.svg',
+  'shield-alert': '/icons/shield-alert.svg',
+  biohazard: '/icons/biohazard.svg'
 } as const;
 
 export type IconName = keyof typeof iconPaths;
