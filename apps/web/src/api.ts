@@ -1,4 +1,15 @@
-import type { LabExecutionPlan, LabProfile, LabSession, SampleRecord, ScenarioSummary, SystemStatus } from '@malware-lab/shared-types';
+import type {
+  LabExecutionPlan,
+  LabProfile,
+  LabSession,
+  SampleRecord,
+  ScenarioSummary,
+  SystemStatus,
+  VmDescriptor,
+  VmInspection,
+  VmRestoreResult,
+  VmValidationReport
+} from '@malware-lab/shared-types';
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -10,7 +21,8 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    const payload = await response.json().catch(() => null) as { message?: string } | null;
+    throw new Error(payload?.message ?? `Request failed: ${response.status}`);
   }
 
   return response.json() as Promise<T>;
@@ -22,6 +34,18 @@ export const api = {
   samples: () => json<SampleRecord[]>('/api/samples'),
   profiles: () => json<LabProfile[]>('/api/lab-profiles'),
   labs: () => json<LabSession[]>('/api/labs'),
+  vms: () => json<VmDescriptor[]>('/api/vms'),
+  vm: (providerId: string, vmId: string) => json<VmInspection>(`/api/vms/${encodeURIComponent(providerId)}/${encodeURIComponent(vmId)}`),
+  validateVm: (providerId: 'virtualbox' | 'hyper-v', vmId: string, profileId?: string) =>
+    json<VmValidationReport>('/api/vms/validate', {
+      method: 'POST',
+      body: JSON.stringify({ providerId, vmId, ...(profileId ? { profileId } : {}) })
+    }),
+  restoreVmBaseline: (providerId: 'virtualbox' | 'hyper-v', vmId: string, profileId?: string) =>
+    json<VmRestoreResult>('/api/vms/restore-baseline', {
+      method: 'POST',
+      body: JSON.stringify({ providerId, vmId, ...(profileId ? { profileId } : {}) })
+    }),
   plan: (labId: string) => json<LabExecutionPlan>(`/api/labs/${labId}/plan`),
   createLab: (scenarioId: string) =>
     json<LabSession>('/api/labs', {
