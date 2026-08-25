@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm",
     "typecheck": "tsc --noEmit src/index.ts --moduleResolution Bundler --module ESNext --target ES2022 --strict",
-    "test": "node --test --experimental-strip-types src/index.test.ts"
+    "test": "node --test --experimental-strip-types src/index.test.ts src/adapters.test.ts"
   },
   "dependencies": {
     "@malware-lab/shared-types": "0.1.0"
