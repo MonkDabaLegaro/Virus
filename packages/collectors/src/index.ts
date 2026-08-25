@@ -174,21 +174,19 @@ export class WindowsObservationCollector implements TelemetryCollector<WindowsOb
         id: `${this.id}-${String(index + 1).padStart(4, '0')}`,
         scenarioId,
         timestamp: new Date(observation.timestamp).toISOString(),
-        kind: observation.kind,
-        action: observation.action,
         tags: ['collector:windows-observation', 'source:imported-observation']
-      } as const;
+      };
 
       if (observation.kind === 'process') {
-        return { ...base, kind: 'process', process: { pid: observation.pid, ppid: observation.ppid, image: observation.image, ...(observation.commandLine ? { commandLine: observation.commandLine } : {}) } };
+        return { ...base, kind: 'process', action: observation.action, process: { pid: observation.pid, ppid: observation.ppid, image: observation.image, ...(observation.commandLine ? { commandLine: observation.commandLine } : {}) } };
       }
       if (observation.kind === 'filesystem') {
-        return { ...base, kind: 'filesystem', file: { path: observation.path, ...(observation.extension ? { extension: observation.extension } : {}) } };
+        return { ...base, kind: 'filesystem', action: observation.action, file: { path: observation.path, ...(observation.extension ? { extension: observation.extension } : {}) } };
       }
       if (observation.kind === 'registry') {
-        return { ...base, kind: 'registry', registry: { key: observation.key, ...(observation.valueName ? { valueName: observation.valueName } : {}) } };
+        return { ...base, kind: 'registry', action: observation.action, registry: { key: observation.key, ...(observation.valueName ? { valueName: observation.valueName } : {}) } };
       }
-      return { ...base, kind: 'network', network: { protocol: observation.protocol, destinationIp: observation.destinationIp, destinationPort: observation.destinationPort } };
+      return { ...base, kind: 'network', action: observation.action, network: { protocol: observation.protocol, destinationIp: observation.destinationIp, destinationPort: observation.destinationPort } };
     });
 
     return { collectorId: this.id, source: this.source, scenarioId, events };
