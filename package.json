@@ -12,7 +12,8 @@
     "dev:api": "npm run dev --workspace @malware-lab/api",
     "dev:web": "npm run dev --workspace @malware-lab/web",
     "build": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
   },
   "engines": {
     "node": ">=22"

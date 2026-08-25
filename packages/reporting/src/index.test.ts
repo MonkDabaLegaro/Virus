@@ -1,0 +1,5 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { renderMarkdownReport } from './index.ts';
+
+test('renders a self-contained defensive analysis report',()=>{ const markdown=renderMarkdownReport({scenarioId:'wannacry',generatedAt:'2026-08-25T16:00:00.000Z',summary:{events:6,findings:3,indicators:4,attackMappings:3},processTree:[],filesystemDiff:[],registryDiff:[],networkFlows:[],indicators:[],attackMappings:[{techniqueId:'T1486',techniqueName:'Data Encrypted for Impact',tactic:'Impact',confidence:'high',findingIds:['det-ransomware-extension'],eventIds:['evt-002','evt-003'],rationale:'Synthetic file rename burst.'}],findings:[{id:'det-ransomware-extension',ruleId:'LAB-RANSOM-001',title:'Burst',severity:'high',eventIds:['evt-002','evt-003'],rationale:'Synthetic fixture.'}],correlations:[],timeline:[]} as any); assert.match(markdown,/^# Malware Lab Analysis Report/m); assert.match(markdown,/Scenario: `wannacry`/); assert.match(markdown,/T1486/); assert.match(markdown,/LAB-RANSOM-001/); });

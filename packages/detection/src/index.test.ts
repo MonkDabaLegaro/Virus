@@ -1,0 +1,5 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { correlateDetections } from './index.ts';
+
+test('correlates independent ransomware-like signals in a short replay window',()=>{ const events=[{id:'evt-002',scenarioId:'wannacry',timestamp:'2017-05-12T10:00:01.000Z',kind:'filesystem',action:'rename',tags:[]},{id:'evt-004',scenarioId:'wannacry',timestamp:'2017-05-12T10:00:02.000Z',kind:'registry',action:'set-value',tags:[]},{id:'evt-005',scenarioId:'wannacry',timestamp:'2017-05-12T10:00:02.500Z',kind:'network',action:'connect',tags:[]} ] as any; const findings=[{id:'det-ransomware-extension',severity:'high',eventIds:['evt-002']},{id:'det-run-key',severity:'high',eventIds:['evt-004']},{id:'det-smb-activity',severity:'medium',eventIds:['evt-005']}] as any; const correlations=correlateDetections(findings,events); assert.equal(correlations.length,1); assert.equal(correlations[0]?.id,'corr-ransomware-fixture'); assert.deepEqual(correlations[0]?.findingIds,['det-ransomware-extension','det-run-key','det-smb-activity']); });

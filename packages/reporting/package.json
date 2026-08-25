@@ -1,5 +1,5 @@
 {
-  "name": "@malware-lab/detection",
+  "name": "@malware-lab/reporting",
   "version": "0.1.0",
   "private": true,
   "type": "module",
