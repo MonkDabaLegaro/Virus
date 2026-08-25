@@ -1,0 +1,8 @@
+[
+{"id":"evt-001","scenarioId":"wannacry","timestamp":"2017-05-12T10:00:00.000Z","kind":"process","action":"start","process":{"pid":4920,"ppid":740,"image":"C:\\Lab\\Sample\\wannacry-demo.exe","commandLine":"wannacry-demo.exe --fixture"},"tags":["fixture","synthetic"]},
+{"id":"evt-002","scenarioId":"wannacry","timestamp":"2017-05-12T10:00:01.000Z","kind":"filesystem","action":"rename","file":{"path":"C:\\Lab\\Documents\\report.docx.WNCRY","extension":"WNCRY"},"tags":["fixture","synthetic","ransomware-like"]},
+{"id":"evt-003","scenarioId":"wannacry","timestamp":"2017-05-12T10:00:01.500Z","kind":"filesystem","action":"rename","file":{"path":"C:\\Lab\\Documents\\budget.xlsx.WNCRY","extension":"WNCRY"},"tags":["fixture","synthetic","ransomware-like"]},
+{"id":"evt-004","scenarioId":"wannacry","timestamp":"2017-05-12T10:00:02.000Z","kind":"registry","action":"set-value","registry":{"key":"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run","valueName":"LabFixture"},"tags":["fixture","synthetic"]},
+{"id":"evt-005","scenarioId":"wannacry","timestamp":"2017-05-12T10:00:02.500Z","kind":"network","action":"connect","network":{"protocol":"tcp","destinationIp":"192.0.2.25","destinationPort":445},"tags":["fixture","synthetic","documentation-ip"]},
+{"id":"evt-006","scenarioId":"wannacry","timestamp":"2017-05-12T10:00:03.000Z","kind":"process","action":"stop","process":{"pid":4920,"ppid":740,"image":"C:\\Lab\\Sample\\wannacry-demo.exe"},"tags":["fixture","synthetic"]}
+]
